@@ -1,0 +1,97 @@
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: wordpress-mysql-config
+  namespace: mysql-operator
+data:
+  my.cnf: |-
+    [mysqld]
+    default_authentication_plugin=mysql_native_password
+---
+apiVersion: "mysql.oracle.com/v1alpha1"
+kind: Cluster
+metadata:
+  name: mysql
+  namespace: mysql-operator
+spec:
+  members: 2
+  multiMaster: true
+  config:
+    name: wordpress-mysql-config
+  rootPasswordSecret:
+    name: wordpress-mysql-root-password
+#  configRef:
+#  volumeClaimTemplate:
+#    metadata:
+#      name: mysql-block-volume
+#    spec:
+#      storageClassName: "oci"
+#      selector:
+#        matchLabels:
+#          oci-availability-domain: "PHX-AD-1"
+#      accessModes:
+#        - ReadWriteOnce
+#      resources:
+#        requests:
+#          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: mysql-operator
+  labels:
+    app: wordpress
+spec:
+  type: NodePort
+  selector:
+    app: wordpress
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30419
+  selector:
+    app: wordpress
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: mysql-operator
+  labels:
+    app: wordpress
+spec:
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      containers:
+      - name: wordpress
+#        image: wordpress:4.8.0-apache
+        image: wordpress
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: mysql-0.mysql
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-mysql-root-password
+              key: password
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wordpress-mysql-root-password
+  namespace: mysql-operator
+data:
+  password: bXktc3VwZXItc2VjcmV0LXBhc3M=
+
